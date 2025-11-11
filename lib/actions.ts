@@ -1,38 +1,11 @@
 'use server';
 
-import type { Browser, Page } from 'playwright';
+import {
+  type AccessibilityCheckState,
+  normalizeUrl,
+} from '@/lib/accessibility-types';
 
-export type FocusTarget = {
-  selector: string;
-  tag: string;
-  role: string | null;
-  name: string | null;
-  hasAccessibleName: boolean;
-  htmlSnippet: string;
-};
-
-export type TabOrderReport = {
-  visited: FocusTarget[];
-  cycleDetected: boolean;
-  limitReached: boolean;
-  shiftTabConsistent: boolean | null;
-};
-
-export type AriaReport = {
-  ariaAttributeCount: number;
-  imagesMissingAlt: Array<{ src: string | null; snippet: string }>;
-};
-
-export type AccessibilityCheckState = {
-  ok: boolean;
-  summary: string;
-  url?: string;
-  tabOrder?: TabOrderReport;
-  aria?: AriaReport;
-  errors?: string[];
-};
-
-const MAX_TAB_ITERATIONS = 100;
+const API_PATH = '/api/check';
 
 export async function checkAccessibilityAction(
   _prevState: AccessibilityCheckState | undefined,
@@ -49,26 +22,30 @@ export async function checkAccessibilityAction(
   }
 
   const normalizedUrl = normalizeUrl(rawUrl);
-  let browser: Browser | null = null;
+  const apiUrl = new URL(API_PATH, resolveBaseUrl());
 
   try {
-    const { chromium } = await import('playwright');
-    browser = await chromium.launch({ headless: false });
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ url: normalizedUrl }),
+      cache: 'no-store',
+    });
 
-    const page = await browser.newPage();
-    await page.goto(normalizedUrl, { waitUntil: 'domcontentloaded', timeout: 20_000 });
-    await page.waitForTimeout(250);
+    if (!response.ok) {
+      const message = `Accessibility service returned ${response.status}`;
+      return {
+        ok: false,
+        summary: `Unable to complete accessibility check for ${normalizedUrl}`,
+        url: normalizedUrl,
+        errors: [message],
+      };
+    }
 
-    const tabOrder = await buildTabOrderReport(page);
-    const aria = await getAriaReport(page);
-
-    return {
-      ok: true,
-      summary: `Accessibility quick-check completed for ${normalizedUrl}`,
-      url: normalizedUrl,
-      tabOrder,
-      aria,
-    };
+    const payload = (await response.json()) as AccessibilityCheckState;
+    return payload;
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     return {
@@ -77,231 +54,21 @@ export async function checkAccessibilityAction(
       url: normalizedUrl,
       errors: [message],
     };
-  } finally {
-    await browser?.close();
   }
 }
 
-function normalizeUrl(input: string): string {
-  if (/^https?:\/\//i.test(input)) {
-    return input;
+function resolveBaseUrl(): string {
+  if (process.env.NODE_ENV !== 'production') {
+    return 'http://localhost:3000';
   }
-  return `https://${input}`;
+
+  if (process.env.NEXT_PUBLIC_APP_URL) {
+    return process.env.NEXT_PUBLIC_APP_URL;
+  }
+
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL}`;
+  }
+
+  return 'https://localhost';
 }
-
-async function buildTabOrderReport(page: Page): Promise<TabOrderReport> {
-  await page.evaluate(() => {
-    const active = document.activeElement as HTMLElement | null;
-    if (active && typeof active.blur === 'function') {
-      active.blur();
-    }
-    window.scrollTo(0, 0);
-  });
-
-  const visited: FocusTarget[] = [];
-  let cycleDetected = false;
-  let limitReached = false;
-
-  for (let i = 0; i < MAX_TAB_ITERATIONS; i++) {
-    await page.keyboard.press('Tab');
-    await page.waitForTimeout(50);
-
-    const target = await getActiveElementMetadata(page);
-    if (!target) {
-      break;
-    }
-
-    if (visited.some((item) => item.selector === target.selector && item.name === target.name)) {
-      cycleDetected = true;
-      break;
-    }
-
-    visited.push(target);
-  }
-
-  if (visited.length === MAX_TAB_ITERATIONS) {
-    limitReached = true;
-  }
-
-  const shiftTabConsistent = await verifyShiftTab(page, visited);
-
-  return { visited, cycleDetected, limitReached, shiftTabConsistent };
-}
-
-async function verifyShiftTab(page: Page, visited: FocusTarget[]): Promise<boolean | null> {
-  if (visited.length <= 1) {
-    return null;
-  }
-
-  const lastTarget = visited[visited.length - 1];
-
-  const refocused = await page.evaluate((selector) => {
-    const el = document.querySelector(selector);
-    if (el instanceof HTMLElement) {
-      el.focus();
-      return true;
-    }
-    return false;
-  }, lastTarget.selector);
-
-  if (!refocused) {
-    return null;
-  }
-
-  for (let i = visited.length - 1; i > 0; i--) {
-    await page.keyboard.press('Shift+Tab');
-    await page.waitForTimeout(50);
-    const target = await getActiveElementMetadata(page);
-    if (!target) {
-      return false;
-    }
-
-    const expected = visited[i - 1];
-    if (target.selector !== expected.selector || target.name !== expected.name) {
-      return false;
-    }
-  }
-
-  return true;
-}
-
-async function getActiveElementMetadata(page: Page): Promise<FocusTarget | null> {
-  return page.evaluate(() => {
-    const el = document.activeElement as HTMLElement | null;
-    if (!el || el === document.body || el === document.documentElement) {
-      return null;
-    }
-
-    function cssEscape(value: string): string {
-      return value.replace(/([!"#$%&'()*+,./:;<=>?@[\\\]^`{|}~ ])/g, '\\$1');
-    }
-
-    function buildSelector(element: Element): string {
-      if ((element as HTMLElement).id) {
-        return `#${cssEscape((element as HTMLElement).id)}`;
-      }
-
-      const path: string[] = [];
-      let current: Element | null = element;
-      let depth = 0;
-
-      while (current && depth < 4) {
-        let selector = current.tagName.toLowerCase();
-        const classes = Array.from((current as HTMLElement).classList);
-        if (classes.length) {
-          selector += `.${classes.map((cls) => cssEscape(cls)).join('.')}`;
-        }
-
-        const siblings = Array.from(current.parentElement?.children || []).filter(
-          (child) => child.tagName === current?.tagName
-        );
-
-        if (siblings.length > 1) {
-          const index = siblings.indexOf(current) + 1;
-          selector += `:nth-of-type(${index})`;
-        }
-
-        path.unshift(selector);
-        current = current.parentElement;
-        depth += 1;
-      }
-
-      return path.join(' > ');
-    }
-
-    function deriveAccessibleName(element: HTMLElement): string | null {
-      const ariaLabel = element.getAttribute('aria-label');
-      if (ariaLabel && ariaLabel.trim().length > 0) {
-        return ariaLabel.trim();
-      }
-
-      const labelledBy = element.getAttribute('aria-labelledby');
-      if (labelledBy) {
-        const ids = labelledBy.split(/\s+/);
-        const text = ids
-          .map((id) => document.getElementById(id))
-          .filter((node): node is HTMLElement => Boolean(node))
-          .map((node) => node.textContent?.trim() || '')
-          .join(' ')
-          .trim();
-        if (text.length > 0) {
-          return text;
-        }
-      }
-
-      const title = element.getAttribute('title');
-      if (title && title.trim().length > 0) {
-        return title.trim();
-      }
-
-      if (element instanceof HTMLImageElement) {
-        const alt = element.getAttribute('alt');
-        if (alt && alt.trim().length > 0) {
-          return alt.trim();
-        }
-      }
-
-      if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
-        const placeholder = element.getAttribute('placeholder');
-        if (placeholder && placeholder.trim().length > 0) {
-          return placeholder.trim();
-        }
-        const nameAttr = element.getAttribute('name');
-        if (nameAttr && nameAttr.trim().length > 0) {
-          return nameAttr.trim();
-        }
-      }
-
-      const textContent = element.textContent?.trim();
-      if (textContent && textContent.length > 0) {
-        return textContent;
-      }
-
-      return null;
-    }
-
-    const selector = buildSelector(el);
-    const role = el.getAttribute('role') || null;
-    const name = deriveAccessibleName(el);
-    const htmlSnippet = el.outerHTML.slice(0, 160);
-
-    return {
-      selector,
-      tag: el.tagName.toLowerCase(),
-      role,
-      name,
-      hasAccessibleName: Boolean(name && name.trim().length > 0),
-      htmlSnippet,
-    };
-  });
-}
-
-async function getAriaReport(page: Page): Promise<AriaReport> {
-  return page.evaluate(() => {
-    const ariaNodes = document.querySelectorAll('[aria-label],[aria-labelledby],[aria-describedby],[role]');
-    const images = Array.from(document.querySelectorAll('img'));
-    const imagesMissingAlt = images
-      .filter((img) => {
-        const alt = img.getAttribute('alt');
-        if (alt === null) {
-          return true;
-        }
-        const trimmed = alt.trim();
-        if (trimmed.length === 0 && !img.getAttribute('role')) {
-          return true;
-        }
-        return false;
-      })
-      .slice(0, 20)
-      .map((img) => ({
-        src: img.getAttribute('src'),
-        snippet: img.outerHTML.slice(0, 160),
-      }));
-
-    return {
-      ariaAttributeCount: ariaNodes.length,
-      imagesMissingAlt,
-    };
-  });
-}
-

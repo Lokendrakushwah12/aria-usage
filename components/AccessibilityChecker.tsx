@@ -3,11 +3,11 @@
 import { useActionState, useMemo } from 'react';
 import { useFormStatus } from 'react-dom';
 
+import { checkAccessibilityAction } from '@/lib/actions';
 import {
   type AccessibilityCheckState,
   type FocusTarget,
-  checkAccessibilityAction,
-} from '@/lib/actions';
+} from '@/lib/accessibility-types';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import {
@@ -97,6 +97,7 @@ function SubmitButton() {
 
   return (
     <Button
+      type="submit"
       variant="default"
       size="lg"
       disabled={pending}
