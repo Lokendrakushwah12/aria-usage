@@ -31,7 +31,7 @@ An automated web accessibility testing tool powered by Playwright. Check tab ord
 1. Clone the repository:
 
 ```bash
-git clone https://github.com/yourusername/aria-project.git
+git clone https://github.com/lokendrakushwah12/aria-usage.git
 cd aria-project
 ```
 
@@ -209,7 +209,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - **Live Demo**: [https://aria-check.vercel.app](https://aria-check.vercel.app)
 - **Documentation**: Coming soon
-- **Report Issues**: [GitHub Issues](https://github.com/yourusername/aria-project/issues)
+- **Report Issues**: [GitHub Issues](https://github.com/lokendrakushwah12/aria-usage/issues)
 
 ## 📧 Contact
 
