@@ -9,9 +9,17 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@base-ui-components/react": "1.0.0-beta.4",
+    "@hugeicons/core-free-icons": "^1.0.16",
+    "@hugeicons/react": "^1.0.5",
     "react": "19.2.0",
     "react-dom": "19.2.0",
-    "next": "16.0.1"
+    "next": "16.0.1",
+    "tailwind-merge": "^3.3.1",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.475.0",
+    "next-themes": "^0.4.6"
   },
   "devDependencies": {
     "typescript": "^5",
@@ -21,6 +29,7 @@
     "@tailwindcss/postcss": "^4",
     "tailwindcss": "^4",
     "eslint": "^9",
-    "eslint-config-next": "16.0.1"
+    "eslint-config-next": "16.0.1",
+    "playwright": "^1.49.0"
   }
 }

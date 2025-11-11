@@ -1,14 +1,16 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { ThemeProvider } from "@/components/theme-provider";
+import { AsciiBackground } from "@/components/AsciiBackground";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const fontSans = Geist({
+  variable: "--font-sans",
   subsets: ["latin"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const fontMono = Geist_Mono({
+  variable: "--font-mono",
   subsets: ["latin"],
 });
 
@@ -23,11 +25,37 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${fontSans.variable} ${fontMono.variable} bg-sidebar font-sans text-foreground antialiased`}
       >
-        {children}
+        <ThemeProvider>
+          <div className="relative flex min-h-svh flex-col overflow-clip before:pointer-events-none before:absolute before:inset-0 before:-z-10 before:bg-sidebar [--header-height:4rem]">
+            <AsciiBackground 
+              image="/image.png"
+              cursor={true}
+              color1="var(--color-sidebar)"
+              color2="#fe6c12"
+              threshold={0.26}
+              glow={true}
+              glowSize={12}
+              glowOpacity={1}
+              static={false}
+              animationInterval={0.15}
+              width={190}
+              asciiSet="detailed"
+              invert={true}
+              brightness={0}
+              contrast={-10}
+              blur={0}
+              cursorRadius={45}
+              cursorSmoothness={40}
+              cursorIntensity={40}
+              className="scale-y-[-1] opacity-80 dark:opacity-40"
+            />
+            {children}
+          </div>
+        </ThemeProvider>
       </body>
     </html>
   );
