@@ -33,7 +33,7 @@ export default function AccessibilityChecker() {
   );
 
   return (
-    <Card className="shadow-md">
+    <Card>
       <CardHeader className="gap-3">
         <CardTitle>Accessibility quick-check</CardTitle>
         <CardDescription>

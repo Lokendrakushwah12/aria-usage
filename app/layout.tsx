@@ -30,12 +30,21 @@ export const metadata: Metadata = {
     title: "ARIA - Accessibility Checker",
     description: "Automated accessibility testing tool powered by Playwright. Check tab order, ARIA attributes, keyboard navigation, and more for any website.",
     siteName: "ARIA",
+    images: [
+      {
+        url: "/og.png",
+        width: 1200,
+        height: 630,
+        alt: "ARIA - Accessibility Checker",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: "ARIA - Accessibility Checker",
     description: "Automated accessibility testing tool powered by Playwright. Check tab order, ARIA attributes, keyboard navigation, and more.",
     creator: "@aria",
+    images: ["/og.png"],
   },
   robots: {
     index: true,
